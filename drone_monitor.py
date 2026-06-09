@@ -26,15 +26,16 @@ if page == "航线规划":
         st.subheader("坐标系设置")
         coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"], index=1)
 
-        # 【修正：校园内部坐标，湖面/操场附近】
+        # 起点A：校园湖泊北侧（校园内部）
         st.subheader("起点A")
-        lat_a = st.number_input("纬度", value=32.2338, format="%.4f", key="la")
-        lon_a = st.number_input("经度", value=118.7472, format="%.4f", key="loa")
+        lat_a = st.number_input("纬度", value=32.2341, format="%.4f", key="la")
+        lon_a = st.number_input("经度", value=118.7462, format="%.4f", key="loa")
         btn_a = st.button("设置A点")
 
+        # 终点B：校园红色操场南侧（校园内部）
         st.subheader("终点B")
-        lat_b = st.number_input("纬度", value=32.2320, format="%.4f", key="lb")
-        lon_b = st.number_input("经度", value=118.7465, format="%.4f", key="lob")
+        lat_b = st.number_input("纬度", value=32.2315, format="%.4f", key="lb")
+        lon_b = st.number_input("经度", value=118.7451, format="%.4f", key="lob")
         btn_b = st.button("设置B点")
 
         # 飞行高度
@@ -48,23 +49,23 @@ if page == "航线规划":
             st.success("✅ B点已设置")
 
     with map_area:
-        # 地图中心改为校园湖面中心
-        center_lat = 32.2330
-        center_lon = 118.7470
+        # 地图中心锁定校园湖泊正中间
+        center_lat = 32.2328
+        center_lon = 118.7457
 
-        # 卫星地图
+        # 卫星底图
         m = folium.Map(
             location=[center_lat, center_lon],
             zoom_start=16,
             tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         )
-        # 障碍物绘制工具栏
+        # 左侧障碍物绘制工具栏
         Draw(draw_options={"polyline":True,"polygon":True,"rectangle":True,"circle":True,"marker":False}, edit_options={"edit":True}).add_to(m)
 
-        # 实时读取输入框坐标渲染标记，同步更新
-        folium.Marker(location=[lat_a, lon_a], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
-        folium.Marker(location=[lat_b, lon_b], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
+        # 实时渲染两点，页面加载直接显示
+        folium.Marker(location=[lat_a, lon_a], popup="起点A（校园湖边）", icon=folium.Icon(color="red")).add_to(m)
+        folium.Marker(location=[lat_b, lon_b], popup="终点B（校园操场）", icon=folium.Icon(color="green")).add_to(m)
 
         # 渲染地图
         st_folium(m, width=720, height=520)
