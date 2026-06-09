@@ -26,16 +26,16 @@ if page == "航线规划":
         st.subheader("坐标系设置")
         coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"])
 
-        # 起点A设置（用你截图里的校园坐标）
+        # 起点A设置（增加唯一key解决ID冲突）
         st.subheader("起点A")
-        lat_a = st.number_input("纬度", value=32.2322, format="%.4f")
-        lon_a = st.number_input("经度", value=118.749, format="%.4f")
+        lat_a = st.number_input("纬度", value=32.2322, format="%.4f", key="lat_a")
+        lon_a = st.number_input("经度", value=118.749, format="%.4f", key="lon_a")
         set_a = st.button("设置A点")
 
-        # 终点B设置
+        # 终点B设置（独立key，不再和A点组件ID重复）
         st.subheader("终点B")
-        lat_b = st.number_input("纬度", value=32.2343, format="%.4f")
-        lon_b = st.number_input("经度", value=118.749, format="%.4f")
+        lat_b = st.number_input("纬度", value=32.2343, format="%.4f", key="lat_b")
+        lon_b = st.number_input("经度", value=118.749, format="%.4f", key="lon_b")
         set_b = st.button("设置B点")
 
         # 飞行参数
