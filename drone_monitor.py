@@ -3,6 +3,36 @@ import pandas as pd
 import time
 import folium
 from streamlit_folium import st_folium
+from folium.plugins import Draw
+import math
+
+# ------------------- 坐标系转换工具函数 -------------------
+def wgs84_to_gcj02(lat, lon):
+    a = 6378245.0
+    ee = 0.00669342162296594323
+    dlat = _transformlat(lon - 105.0, lat - 35.0)
+    dlon = _transformlon(lon - 105.0, lat - 35.0)
+    radlat = lat / 180.0 * math.pi
+    magic = math.sin(radlat)
+    magic = 1 - ee * magic * magic
+    sqrtmagic = math.sqrt(magic)
+    dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * math.pi)
+    dlon = (dlon * 180.0) / (a / sqrtmagic * math.cos(radlat) * math.pi)
+    return lat + dlat, lon + dlon
+
+def _transformlat(lon, lat):
+    ret = -100.0 + 2.0 * lon + 3.0 * lat + 0.2 * lat * lat + 0.1 * lon * lat + 0.2 * math.sqrt(abs(lon))
+    ret += (20.0 * math.sin(6.0 * lon * math.pi) + 20.0 * math.sin(2.0 * lon * math.pi)) * 2.0 / 3.0
+    ret += (20.0 * math.sin(lat * math.pi) + 40.0 * math.sin(lat / 3.0 * math.pi)) * 2.0 / 3.0
+    ret += (160.0 * math.sin(lat / 12.0 * math.pi) + 320 * math.sin(lat * math.pi / 30.0)) * 2.0 / 3.0
+    return ret
+
+def _transformlon(lon, lat):
+    ret = 300.0 + lon + 2.0 * lat + 0.1 * lon * lon + 0.1 * lon * lat + 0.1 * math.sqrt(abs(lon))
+    ret += (20.0 * math.sin(6.0 * lon * math.pi) + 20.0 * math.sin(2.0 * lon * math.pi)) * 2.0 / 3.0
+    ret += (20.0 * math.sin(lon * math.pi) + 40.0 * math.sin(lon / 3.0 * math.pi)) * 2.0 / 3.0
+    ret += (150.0 * math.sin(lon / 12.0 * math.pi) + 300.0 * math.sin(lon / 30.0 * math.pi)) * 2.0 / 3.0
+    return ret
 
 # ------------------- 页面配置 -------------------
 st.set_page_config(page_title="无人机监控系统", layout="wide")
@@ -21,6 +51,7 @@ if page == "航线规划":
     st.header("🗺️ 航线规划")
     col1, col2 = st.columns([3, 1])
 
+    # 先获取所有坐标设置
     with col2:
         # 坐标系设置
         st.subheader("坐标系设置")
@@ -48,12 +79,21 @@ if page == "航线规划":
         if set_b:
             st.success("✅ B点已设置")
 
+    # 再处理地图显示
     with col1:
-        # 初始化地图（以A点为中心）
-        center_lat = (lat_a + lat_b) / 2 if (set_a or set_b) else 32.2322
-        center_lon = (lon_a + lon_b) / 2 if (set_a or set_b) else 118.749
+        # 坐标转换
+        if coord_type == "GCJ-02(高德/百度)":
+            lat_a_map, lon_a_map = wgs84_to_gcj02(lat_a, lon_a)
+            lat_b_map, lon_b_map = wgs84_to_gcj02(lat_b, lon_b)
+        else:
+            lat_a_map, lon_a_map = lat_a, lon_a
+            lat_b_map, lon_b_map = lat_b, lon_b
 
-        # 卫星地图底图（方便看校园建筑/障碍物）
+        # 计算地图中心
+        center_lat = (lat_a_map + lat_b_map) / 2
+        center_lon = (lon_a_map + lon_b_map) / 2
+
+        # 初始化卫星地图（和作业截图一致）
         m = folium.Map(
             location=[center_lat, center_lon],
             zoom_start=16,
@@ -61,11 +101,23 @@ if page == "航线规划":
             attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         )
 
+        # 添加障碍物圈选工具（作业要求）
+        Draw(
+            draw_options={
+                'polyline': True,
+                'polygon': True,
+                'rectangle': True,
+                'circle': True,
+                'marker': False
+            },
+            edit_options={'edit': True}
+        ).add_to(m)
+
         # 添加A、B点标记
         if set_a:
-            folium.Marker([lat_a, lon_a], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
+            folium.Marker([lat_a_map, lon_a_map], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
         if set_b:
-            folium.Marker([lat_b, lon_b], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
+            folium.Marker([lat_b_map, lon_b_map], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
 
         # 显示地图
         st_folium(m, width=700, height=500)
