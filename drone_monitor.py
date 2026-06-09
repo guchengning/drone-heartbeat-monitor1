@@ -18,18 +18,17 @@ if page == "航线规划":
     map_area, ctrl_area = st.columns([3, 1])
     with ctrl_area:
         st.subheader("坐标系设置")
-        coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"], index=1)
+        coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"], index=0)
 
-        # 校内湖边A点（经度大幅减小，左移校园）
+        # 校园内操场、湖泊坐标
         st.subheader("起点A")
-        lat_a = st.number_input("纬度", value=32.2341, format="%.4f", key="la")
-        lon_a = st.number_input("经度", value=118.7450, format="%.4f", key="loa")
+        lat_a = st.number_input("纬度", value=32.2339, format="%.4f", key="la")
+        lon_a = st.number_input("经度", value=118.7443, format="%.4f", key="loa")
         btn_a = st.button("设置A点")
 
-        # 校内操场B点
         st.subheader("终点B")
-        lat_b = st.number_input("纬度", value=32.2315, format="%.4f", key="lb")
-        lon_b = st.number_input("经度", value=118.7440, format="%.4f", key="lob")
+        lat_b = st.number_input("纬度", value=32.2317, format="%.4f", key="lb")
+        lon_b = st.number_input("经度", value=118.7435, format="%.4f", key="lob")
         btn_b = st.button("设置B点")
 
         st.subheader("飞行参数")
@@ -40,9 +39,9 @@ if page == "航线规划":
             st.success("✅ B点已设置")
 
     with map_area:
-        # 地图中心锁定校园湖泊
+        # 地图中心锁定校园
         center_lat = 32.2328
-        center_lon = 118.7445
+        center_lon = 118.7439
         m = folium.Map(
             location=[center_lat, center_lon],
             zoom_start=16,
@@ -50,7 +49,7 @@ if page == "航线规划":
             attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         )
         Draw(draw_options={"polyline":True,"polygon":True,"rectangle":True,"circle":True,"marker":False}, edit_options={"edit":True}).add_to(m)
-        # 渲染校内两点
+        # 直接渲染点位，无转换偏移
         folium.Marker([lat_a, lon_a], popup="起点A（校园湖边）", icon=folium.Icon(color="red")).add_to(m)
         folium.Marker([lat_b, lon_b], popup="终点B（校园操场）", icon=folium.Icon(color="green")).add_to(m)
         st_folium(m, width=720, height=520)
