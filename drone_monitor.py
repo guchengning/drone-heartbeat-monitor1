@@ -5,73 +5,97 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 
-# 页面基础配置
+# ------------------- 页面配置 -------------------
 st.set_page_config(page_title="无人机监控系统", layout="wide")
 
-# 侧边双页面切换
+# 侧边栏导航（和示例一样的布局）
 page = st.sidebar.radio("功能页面", ["航线规划", "飞行监控"])
 
-# 会话状态初始化心跳包
+# ------------------- 全局变量初始化 -------------------
 if "heartbeat_data" not in st.session_state:
     st.session_state["heartbeat_data"] = pd.DataFrame(columns=["时间", "序号"])
 if "running" not in st.session_state:
     st.session_state["running"] = False
 
-# ========== 航线规划页面 ==========
+# ------------------- 1. 航线规划页面（地图页面） -------------------
 if page == "航线规划":
     st.header("🗺️ 航线规划")
+    # 左右分栏：左地图、右侧控制面板
     map_col, ctrl_col = st.columns([3, 1])
 
+    # ------------------- 右侧控制面板 -------------------
     with ctrl_col:
+        # 坐标系设置（和示例一样默认选GCJ-02）
         st.subheader("坐标系设置")
         coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"], index=1)
 
+        # 起点A（和示例完全一致的校园坐标）
         st.subheader("起点A")
-        lat_a = st.number_input("纬度", value=32.2322, format="%.4f", key="lat_a_in")
-        lon_a = st.number_input("经度", value=118.7490, format="%.4f", key="lon_a_in")
+        lat_a = st.number_input("纬度", value=32.2322, format="%.4f", key="lat_a")
+        lon_a = st.number_input("经度", value=118.7490, format="%.4f", key="lon_a")
+        set_a = st.button("设置A点")
 
+        # 终点B（和示例完全一致的校园坐标）
         st.subheader("终点B")
-        lat_b = st.number_input("纬度", value=32.2343, format="%.4f", key="lat_b_in")
-        lon_b = st.number_input("经度", value=118.7490, format="%.4f", key="lon_b_in")
+        lat_b = st.number_input("纬度", value=32.2343, format="%.4f", key="lat_b")
+        lon_b = st.number_input("经度", value=118.7490, format="%.4f", key="lon_b")
+        set_b = st.button("设置B点")
 
+        # 飞行参数
         st.subheader("飞行参数")
-        fly_height = st.slider("设定飞行高度(m)", min_value=0, max_value=200, value=50)
+        height = st.slider("设定飞行高度(m)", 0, 200, 50)
 
+        # 系统状态提示（和示例一样的状态框）
+        st.markdown("### 系统状态")
+        if set_a:
+            st.success("✅ A点已设置")
+        if set_b:
+            st.success("✅ B点已设置")
+
+    # ------------------- 左侧地图显示 -------------------
     with map_col:
-        # 先不做坐标转换，直接用原始坐标渲染，保证点位在视野内
-        a_lat_map, a_lon_map = lat_a, lon_a
-        b_lat_map, b_lon_map = lat_b, lon_b
+        # 地图中心直接设为校园区域，打开页面就显示校园
+        campus_lat = 32.2330
+        campus_lon = 118.7490
 
-        map_center_lat = (lat_a + lat_b) / 2
-        map_center_lon = (lon_a + lon_b) / 2
-
-        # 卫星底图
+        # 卫星地图底图（和示例一致的Esri影像）
         m = folium.Map(
-            location=[map_center_lat, map_center_lon],
+            location=[campus_lat, campus_lon],
             zoom_start=16,
             tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         )
-        # 障碍物绘制工具栏
+
+        # 左侧障碍物绘制工具栏（作业要求）
         Draw(
-            draw_options={"polyline":True,"polygon":True,"rectangle":True,"circle":True,"marker":False},
-            edit_options={"edit": True}
+            draw_options={
+                'polyline': True,
+                'polygon': True,
+                'rectangle': True,
+                'circle': True,
+                'marker': False
+            },
+            edit_options={'edit': True}
         ).add_to(m)
 
-        # 强制添加两个标记，页面加载立刻显示
-        folium.Marker([a_lat_map, a_lon_map], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
-        folium.Marker([b_lat_map, b_lon_map], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
+        # 添加A、B点标记（和示例一样的红/绿色标记）
+        if set_a or set_b:
+            # 暂时去掉坐标转换，先保证点位在校园里
+            folium.Marker([lat_a, lon_a], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
+            folium.Marker([lat_b, lon_b], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
 
         # 渲染地图
         st_folium(m, width=720, height=520)
 
-# ========== 飞行监控页面 ==========
+# ------------------- 2. 飞行监控页面（心跳包页面） -------------------
 elif page == "飞行监控":
     st.header("📡 实时心跳包序号与时间变化")
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
+
+    # 控制按钮
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
         start_btn = st.button("开始监测")
-    with btn_col2:
+    with col_btn2:
         stop_btn = st.button("停止监测")
 
     if start_btn:
@@ -80,18 +104,24 @@ elif page == "飞行监控":
     if stop_btn:
         st.session_state["running"] = False
 
-    status_box = st.empty()
-    chart_box = st.empty()
+    # 显示区域
+    status_placeholder = st.empty()
+    chart_placeholder = st.empty()
 
+    # 心跳包模拟循环
     if st.session_state["running"]:
         count = 0
         while st.session_state["running"]:
-            now = time.strftime("%H:%M:%S")
+            now_time = time.strftime("%H:%M:%S")
             count += 1
-            status_box.success(f"收到心跳包 | 序号: {count} | 时间: {now}")
-            new_data = pd.DataFrame({"时间":[now], "序号":[count]})
-            st.session_state["heartbeat_data"] = pd.concat([st.session_state["heartbeat_data"], new_data], ignore_index=True)
-            chart_box.line_chart(st.session_state["heartbeat_data"], x="时间", y="序号")
+
+            status_placeholder.success(f"收到心跳包 | 序号: {count} | 时间: {now_time}")
+
+            new_row = pd.DataFrame({"时间": [now_time], "序号": [count]})
+            st.session_state["heartbeat_data"] = pd.concat([st.session_state["heartbeat_data"], new_row], ignore_index=True)
+
+            chart_placeholder.line_chart(st.session_state["heartbeat_data"], x="时间", y="序号")
+
             time.sleep(1)
     else:
-        status_box.info("点击「开始监测」按钮启动心跳包模拟")
+        status_placeholder.info("点击「开始监测」按钮启动心跳包模拟")
