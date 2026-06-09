@@ -1,55 +1,114 @@
 import streamlit as st
-import time
 import pandas as pd
-from datetime import datetime
+import time
+import folium
+from streamlit_folium import st_folium
 
-# 初始化数据存储
-if 'heartbeat_list' not in st.session_state:
-    st.session_state['heartbeat_list'] = []
-if 'last_receive_time' not in st.session_state:
-    st.session_state['last_receive_time'] = time.time()
-if 'seq_num' not in st.session_state:
-    st.session_state['seq_num'] = 0
+# ------------------- 页面配置 -------------------
+st.set_page_config(page_title="无人机监控系统", layout="wide")
 
-# 页面标题
-st.title("无人机心跳监测可视化")
-st.subheader("实时心跳包序号与时间变化")
+# 侧边栏导航（实现双页面切换）
+page = st.sidebar.radio("功能页面", ["航线规划", "飞行监控"])
 
-# 模拟无人机发送心跳包
-def send_heartbeat():
-    st.session_state['seq_num'] += 1
-    current_time = datetime.now().strftime("%H:%M:%S")
-    data = {
-        "序号": st.session_state['seq_num'],
-        "时间": current_time
-    }
-    st.session_state['heartbeat_list'].append(data)
-    st.session_state['last_receive_time'] = time.time()
-    return data
+# ------------------- 全局变量初始化 -------------------
+if "heartbeat_data" not in st.session_state:
+    st.session_state["heartbeat_data"] = pd.DataFrame(columns=["时间", "序号"])
+if "running" not in st.session_state:
+    st.session_state["running"] = False
 
-# 断线检测（3秒没收到就报警）
-def check_connection():
-    current_time = time.time()
-    if current_time - st.session_state['last_receive_time'] > 3:
-        st.error("⚠️ 连接超时！无人机疑似断线！")
-        return False
-    return True
+# ------------------- 1. 航线规划页面 -------------------
+if page == "航线规划":
+    st.header("🗺️ 航线规划")
+    col1, col2 = st.columns([3, 1])
 
-# 开始按钮
-if st.button("开始监测"):
-    placeholder = st.empty()
-    while True:
-        with placeholder.container():
-            # 发送并记录心跳
-            new_data = send_heartbeat()
-            st.success(f"收到心跳包 | 序号：{new_data['序号']} | 时间：{new_data['时间']}")
-            
-            # 检查是否断线
-            check_connection()
+    with col2:
+        # 坐标系设置
+        st.subheader("坐标系设置")
+        coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"])
 
-            # 画折线图
-            df = pd.DataFrame(st.session_state['heartbeat_list'])
-            st.line_chart(df, x="时间", y="序号")
+        # 起点A设置（用你截图里的校园坐标）
+        st.subheader("起点A")
+        lat_a = st.number_input("纬度", value=32.2322, format="%.4f")
+        lon_a = st.number_input("经度", value=118.749, format="%.4f")
+        set_a = st.button("设置A点")
 
-            # 控制每秒发一次心跳
+        # 终点B设置
+        st.subheader("终点B")
+        lat_b = st.number_input("纬度", value=32.2343, format="%.4f")
+        lon_b = st.number_input("经度", value=118.749, format="%.4f")
+        set_b = st.button("设置B点")
+
+        # 飞行参数
+        st.subheader("飞行参数")
+        height = st.slider("设定飞行高度(m)", 0, 200, 50)
+
+        # 状态提示
+        if set_a:
+            st.success("✅ A点已设置")
+        if set_b:
+            st.success("✅ B点已设置")
+
+    with col1:
+        # 初始化地图（以A点为中心）
+        center_lat = (lat_a + lat_b) / 2 if (set_a or set_b) else 32.2322
+        center_lon = (lon_a + lon_b) / 2 if (set_a or set_b) else 118.749
+
+        # 卫星地图底图（方便看校园建筑/障碍物）
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=16,
+            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+        )
+
+        # 添加A、B点标记
+        if set_a:
+            folium.Marker([lat_a, lon_a], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
+        if set_b:
+            folium.Marker([lat_b, lon_b], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
+
+        # 显示地图
+        st_folium(m, width=700, height=500)
+
+# ------------------- 2. 飞行监控页面（你的心跳包代码） -------------------
+elif page == "飞行监控":
+    st.header("📡 实时心跳包序号与时间变化")
+
+    # 控制按钮
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        start_btn = st.button("开始监测")
+    with col_btn2:
+        stop_btn = st.button("停止监测")
+
+    if start_btn:
+        st.session_state["running"] = True
+        st.session_state["heartbeat_data"] = pd.DataFrame(columns=["时间", "序号"])
+    if stop_btn:
+        st.session_state["running"] = False
+
+    # 显示区域
+    status_placeholder = st.empty()
+    chart_placeholder = st.empty()
+
+    # 心跳包模拟循环
+    if st.session_state["running"]:
+        count = 0
+        while st.session_state["running"]:
+            # 获取当前时间和序号
+            now_time = time.strftime("%H:%M:%S")
+            count += 1
+
+            # 更新状态显示
+            status_placeholder.success(f"收到心跳包 | 序号: {count} | 时间: {now_time}")
+
+            # 保存数据
+            new_row = pd.DataFrame({"时间": [now_time], "序号": [count]})
+            st.session_state["heartbeat_data"] = pd.concat([st.session_state["heartbeat_data"], new_row], ignore_index=True)
+
+            # 更新折线图
+            chart_placeholder.line_chart(st.session_state["heartbeat_data"], x="时间", y="序号")
+
             time.sleep(1)
+    else:
+        status_placeholder.info("点击「开始监测」按钮启动心跳包模拟")
