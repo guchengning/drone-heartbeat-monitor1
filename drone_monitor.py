@@ -26,32 +26,31 @@ if page == "航线规划":
         st.subheader("坐标系设置")
         coord_type = st.radio("输入坐标系", ["WGS-84", "GCJ-02(高德/百度)"], index=1)
 
-        # 起点A输入框
+        # 【修正：校园内部坐标，湖面/操场附近】
         st.subheader("起点A")
-        lat_a = st.number_input("纬度", value=32.2322, format="%.4f", key="la")
-        lon_a = st.number_input("经度", value=118.7490, format="%.4f", key="loa")
+        lat_a = st.number_input("纬度", value=32.2338, format="%.4f", key="la")
+        lon_a = st.number_input("经度", value=118.7472, format="%.4f", key="loa")
         btn_a = st.button("设置A点")
 
-        # 终点B输入框
         st.subheader("终点B")
-        lat_b = st.number_input("纬度", value=32.2343, format="%.4f", key="lb")
-        lon_b = st.number_input("经度", value=118.7490, format="%.4f", key="lob")
+        lat_b = st.number_input("纬度", value=32.2320, format="%.4f", key="lb")
+        lon_b = st.number_input("经度", value=118.7465, format="%.4f", key="lob")
         btn_b = st.button("设置B点")
 
         # 飞行高度
         st.subheader("飞行参数")
         st.slider("设定飞行高度(m)", min_value=0, max_value=200, value=50)
 
-        # 点击按钮后的提示文字
+        # 状态提示
         if btn_a:
             st.success("✅ A点已设置")
         if btn_b:
             st.success("✅ B点已设置")
 
     with map_area:
-        # 地图中心固定校园中间坐标
+        # 地图中心改为校园湖面中心
         center_lat = 32.2330
-        center_lon = 118.7490
+        center_lon = 118.7470
 
         # 卫星地图
         m = folium.Map(
@@ -60,17 +59,17 @@ if page == "航线规划":
             tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         )
-        # 左侧绘制障碍物工具
+        # 障碍物绘制工具栏
         Draw(draw_options={"polyline":True,"polygon":True,"rectangle":True,"circle":True,"marker":False}, edit_options={"edit":True}).add_to(m)
 
-        # 【核心改动】无任何判断，直接强制添加A、B标记，页面一加载就出现
+        # 实时读取输入框坐标渲染标记，同步更新
         folium.Marker(location=[lat_a, lon_a], popup="起点A", icon=folium.Icon(color="red")).add_to(m)
         folium.Marker(location=[lat_b, lon_b], popup="终点B", icon=folium.Icon(color="green")).add_to(m)
 
         # 渲染地图
         st_folium(m, width=720, height=520)
 
-# ========== 飞行监控页面（心跳包） ==========
+# ========== 飞行监控页面 ==========
 elif page == "飞行监控":
     st.header("📡 实时心跳包序号与时间变化")
     c1, c2 = st.columns(2)
