@@ -237,17 +237,20 @@ with right_col:
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        # 一键部署：写入本地文件
+        # 一键部署：修复版，写入本地文件并强制刷新状态
         if st.button("💾 一键部署", type="primary", use_container_width=True):
             config = {
                 "version": "v12.2",
                 "save_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "obstacles": st.session_state.polygon_obstacles
             }
+            # 真正写入本地文件
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             st.session_state.last_save_time = config["save_time"]
             st.success("✅ 一键部署完成！障碍物已永久保存")
+            # 强制刷新页面，让状态数字更新
+            st.rerun()
     with col_btn2:
         uploaded_file = st.file_uploader("📂 从文件加载", type=["json"], label_visibility="collapsed")
         if uploaded_file is not None:
@@ -300,7 +303,7 @@ with right_col:
     else:
         st.button("⬇️ 下载 (暂无数据)", disabled=True, use_container_width=True)
     
-    # 文件状态展示
+    # 文件状态展示（修复版，会实时显示真实数量）
     status_text = f"📂 文件状态：共 {len(st.session_state.polygon_obstacles)} 个障碍物"
     if st.session_state.last_save_time:
         status_text += f" | 保存时间：{st.session_state.last_save_time}"
