@@ -6,6 +6,7 @@ from folium.plugins import Draw, MousePosition
 import json
 import datetime
 import math
+import os
 
 # ==================== 页面配置 ====================
 st.set_page_config(page_title="航线规划 - 3D地图", layout="wide")
@@ -46,7 +47,23 @@ def circle_to_polygon(center_lng, center_lat, radius_meters, num_points=24):
         points.append([center_lng + offset_lng, center_lat + offset_lat])
     return points
 
-# ==================== 初始化会话状态 ====================
+# ==================== 初始化会话状态 + 程序启动自动读取本地障碍物文件 ====================
+CONFIG_PATH = "obstacle_config.json"
+# 启动时自动加载历史障碍物配置
+if os.path.exists(CONFIG_PATH):
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            load_cfg = json.load(f)
+            load_obstacles = load_cfg.get("obstacles", [])
+            load_save_time = load_cfg.get("save_time")
+    except Exception as e:
+        load_obstacles = []
+        load_save_time = None
+else:
+    load_obstacles = []
+    load_save_time = None
+
+# 会话变量初始化
 if 'coord_type' not in st.session_state:
     st.session_state.coord_type = "WGS-84"
 if 'pointA' not in st.session_state:
@@ -56,9 +73,9 @@ if 'pointB' not in st.session_state:
 if 'flight_height' not in st.session_state:
     st.session_state.flight_height = 50
 if 'polygon_obstacles' not in st.session_state:
-    st.session_state.polygon_obstacles = []
+    st.session_state.polygon_obstacles = load_obstacles
 if 'last_save_time' not in st.session_state:
-    st.session_state.last_save_time = None
+    st.session_state.last_save_time = load_save_time
 
 # ==================== 布局 ====================
 left_col, right_col = st.columns([3.5, 1.2])
@@ -95,7 +112,7 @@ with left_col:
     folium.PolyLine([(latA_w, lngA_w), (latB_w, lngB_w)],
                     color="blue", weight=5, opacity=0.8, dash_array="5, 10").add_to(m)
 
-    # ✅ 核心：渲染已存储的障碍物（红色边框 + 半透明红填充）
+    # ✅ 渲染已存储的障碍物（红色边框 + 半透明红填充）
     for obs in st.session_state.polygon_obstacles:
         coords = obs["coordinates"]  # 格式为 [[lng, lat], ...]
         poly_coords = [[c[1], c[0]] for c in coords]  # 转 [lat, lng]
@@ -159,34 +176,30 @@ with left_col:
     # 渲染地图
     output = st_folium(m, height=800, use_container_width=True, key="map_key", returned_objects=["last_draw"])
 
-    # ✅ 核心修改：自动识别逻辑（用户绘制框后，自动保存为红色障碍物）
+    # ✅ 自动识别绘制图形，无需手动确认按钮
     if output and output.get("last_draw") and output["last_draw"].get("geometry"):
         geom = output["last_draw"]["geometry"]
         coords = []
         
-        # 处理多边形和矩形（它们都是 Polygon 类型）
+        # 处理多边形/矩形
         if geom["type"] == "Polygon":
             coords = geom["coordinates"][0]
-        
-        # 处理圆形（Circle 类型）
+        # 处理圆形障碍物
         elif geom["type"] == "Circle":
-            # 圆形的坐标格式：[[lng, lat], radius]
             center = geom["coordinates"][0]
             radius = geom["coordinates"][1]
-            # 将圆转换为多边形近似，存储到障碍物列表
             coords = circle_to_polygon(center[0], center[1], radius)
         
         if coords:
-            # 自动生成一个障碍物
             new_obs = {
                 "name": f"自动识别障碍物 {len(st.session_state.polygon_obstacles) + 1}",
                 "coordinates": coords,
-                "height": 40  # 默认高度
+                "height": 40
             }
             st.session_state.polygon_obstacles.append(new_obs)
             st.rerun()
 
-# ==================== 右侧：控制面板（功能增强） ====================
+# ==================== 右侧：控制面板（修复一键部署逻辑） ====================
 with right_col:
     st.subheader("🎮 控制面板")
     
@@ -217,29 +230,24 @@ with right_col:
 
     st.divider()
     
-    # 🚧 障碍物配置持久化
+    # 🚧 障碍物配置持久化模块
     st.markdown("### 🚧 障碍物配置持久化")
-    st.caption("配置文件：`obstacle_config.json` | 版本：v12.2")
+    st.caption(f"配置文件：{CONFIG_PATH} | 版本：v12.2")
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        # 💾 保存到文件（一键部署）
+        # 💾 修复后的一键部署：点击直接写入本地JSON文件，立刻提示成功，无二次操作
         if st.button("💾 一键部署", type="primary", use_container_width=True):
             config = {
                 "version": "v12.2",
                 "save_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "obstacles": st.session_state.polygon_obstacles
             }
-            config_json = json.dumps(config, indent=2, ensure_ascii=False)
-            st.download_button(
-                label="📥 下载配置",
-                data=config_json,
-                file_name="obstacle_config.json",
-                mime="application/json",
-                use_container_width=True
-            )
+            # 直接写入本地文件，永久保存
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
             st.session_state.last_save_time = config["save_time"]
-            st.success("✅ 一键部署完成！已生成文件")
+            st.success("✅ 一键部署完成！障碍物已永久保存，重启页面自动加载")
     with col_btn2:
         uploaded_file = st.file_uploader("📂 从文件加载", type=["json"], label_visibility="collapsed")
         if uploaded_file is not None:
@@ -247,30 +255,38 @@ with right_col:
                 config = json.load(uploaded_file)
                 st.session_state.polygon_obstacles = config.get("obstacles", [])
                 st.session_state.last_save_time = config.get("save_time", None)
+                # 加载后同步写入本地文件
+                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
                 st.rerun()
             except Exception as e:
                 st.error(f"加载失败: {e}")
     
     col_btn3, col_btn4 = st.columns(2)
     with col_btn3:
-        # 垃圾桶图标（清理所有框）
         if st.button("🗑️ 清理所有框", use_container_width=True):
             st.session_state.polygon_obstacles = []
             st.session_state.last_save_time = None
-            st.success("已清理所有障碍物")
+            # 同步清空本地配置文件
+            empty_config = {"version": "v12.2", "save_time": None, "obstacles": []}
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(empty_config, f, indent=2, ensure_ascii=False)
+            st.success("已清理所有障碍物并同步本地文件")
             st.rerun()
     with col_btn4:
-        # 一键清理（删除所有存储的文件）
         if st.button("🧹 一键清理存储", type="primary", use_container_width=True):
             st.session_state.polygon_obstacles = []
             st.session_state.last_save_time = None
+            empty_config = {"version": "v12.2", "save_time": None, "obstacles": []}
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(empty_config, f, indent=2, ensure_ascii=False)
             st.success("已清除所有存储的障碍物数据")
             st.rerun()
     
     st.divider()
     
-    # 📥 下载配置文件
-    st.markdown("#### 📥 下载配置文件到本地")
+    # 📥 手动下载配置文件备份
+    st.markdown("#### 📥 下载配置文件到本地备份")
     if st.session_state.polygon_obstacles:
         config_download = {
             "version": "v12.2",
@@ -287,7 +303,7 @@ with right_col:
     else:
         st.button("⬇️ 下载 (暂无数据)", disabled=True, use_container_width=True)
     
-    # 📂 文件状态信息框
+    # 📂 文件状态信息
     status_text = f"📂 文件状态：共 {len(st.session_state.polygon_obstacles)} 个障碍物"
     if st.session_state.last_save_time:
         status_text += f" | 保存时间：{st.session_state.last_save_time}"
@@ -309,4 +325,4 @@ c1.metric("起点 A", f"({st.session_state.pointA['lat']:.6f}, {st.session_state
 c2.metric("终点 B", f"({st.session_state.pointB['lat']:.6f}, {st.session_state.pointB['lng']:.6f})")
 c3.metric("飞行高度", f"{st.session_state.flight_height} 米")
 st.caption(f"输入坐标系: {st.session_state.coord_type}")
-st.info("🎯 使用多边形、矩形或圆形工具在地图上绘制黄色框，系统会自动将其识别为红色障碍物。右侧可一键部署存储或一键清理所有数据。")
+st.info("🎯 使用多边形、矩形或圆形工具在地图上绘制黄色框，系统会自动将其识别为红色障碍物。右侧点击【一键部署】永久保存，重启页面自动加载，无需重复圈选。")
